@@ -1,0 +1,25 @@
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+*.venv
+
+# Environment Variables
+.env
+
+# Local Vector Database
+# This prevents the large database files from being committed to Git
+vector_store/
+
+# IDE / Editor specific
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/
+

@@ -1,0 +1,8 @@
+streamlit
+together
+sentence-transformers
+chromadb
+geopandas
+rasterio
+shapely
+python-dotenv
