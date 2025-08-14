@@ -9,20 +9,19 @@ from shapely.geometry import Point
 from together import Together
 
 from config import (
-    VECTOR_STORE_DIR, EMBEDDING_MODEL_NAME, LLM_MODEL_NAME, CHROMA_COLLECTION_NAME
+    EMBEDDING_MODEL_NAME, LLM_MODEL_NAME, CHROMA_COLLECTION_NAME
 )
 
-# UPDATED: Encapsulate all logic within a class to prevent execution on import.
+# UPDATED: The class is now initialized with a ChromaDB client.
 class GeoRetriever:
-    def __init__(self):
+    def __init__(self, client: chromadb.Client):
         """
         Initializes all necessary components for the retriever.
-        This is called only after the data processing check in app.py.
         """
         print("Initializing GeoRetriever...")
-        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-        self.client = chromadb.PersistentClient(path=VECTOR_STORE_DIR)
+        self.client = client
         self.collection = self.client.get_collection(name=CHROMA_COLLECTION_NAME)
+        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
         self.geolocator = Nominatim(user_agent="geo_rag_app")
         
         try:
@@ -62,7 +61,7 @@ Landmark Name:
 
     def perform_hybrid_retrieval(self, query: str, gdf: gpd.GeoDataFrame, top_k: int = 1):
         """
-        Performs a geospatial search by geocoding the entity and finding the containing ward.
+        Performs a geospatial search by geocoding the entity and find the containing ward.
         """
         entity_name = self.extract_entity_from_query(query)
         

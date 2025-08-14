@@ -10,11 +10,10 @@ import geopandas as gpd
 import os
 from dotenv import load_dotenv
 import pydeck as pdk
+import chromadb
 
 from config import GDF_PICKLE_PATH, VECTOR_STORE_DIR
-# UPDATED: Import the retriever module itself, not its functions directly
 import retriever
-# UPDATED: Import the main function from data_processing
 from data_processing import main as run_data_processing
 
 # --- Page Configuration ---
@@ -28,7 +27,6 @@ st.set_page_config(
 load_dotenv() 
 
 # --- Self-Initializing Data Setup ---
-# This block ensures that the data processing runs automatically if the DB is missing.
 if not os.path.exists(VECTOR_STORE_DIR) or not os.path.exists(GDF_PICKLE_PATH):
     st.info("First-time setup: The data is being processed. This may take a few minutes...")
     with st.spinner("Downloading data, creating embeddings, and building the database..."):
@@ -40,19 +38,17 @@ if not os.path.exists(VECTOR_STORE_DIR) or not os.path.exists(GDF_PICKLE_PATH):
 @st.cache_resource
 def initialize_retriever():
     """
-    Initializes all the necessary components for the retriever.
-    Using @st.cache_resource ensures this is done only once.
+    Initializes the ChromaDB client and the GeoRetriever class.
+    This is now guaranteed to run after the data check.
     """
-    return retriever.GeoRetriever()
+    client = chromadb.PersistentClient(path=VECTOR_STORE_DIR)
+    return retriever.GeoRetriever(client)
 
 @st.cache_data
 def load_geodata():
     """
     Loads the preprocessed GeoDataFrame from a Parquet file.
     """
-    if not os.path.exists(GDF_PICKLE_PATH):
-        st.error(f"Processed data file not found at {GDF_PICKLE_PATH}. Please run `src/data_processing.py` first.")
-        return None
     return gpd.read_parquet(GDF_PICKLE_PATH)
 
 # --- Pydeck Map Function ---
@@ -114,7 +110,6 @@ def main():
             return
 
         with st.spinner("Searching wards and asking the LLM..."):
-            # UPDATED: Call methods from the retriever object
             context_str, result_gdf = geo_retriever.perform_hybrid_retrieval(query_text, gdf)
             if result_gdf.empty:
                 st.warning("Could not find a relevant ward. Please try another question.")
