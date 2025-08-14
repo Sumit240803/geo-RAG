@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 import pydeck as pdk
 
 from config import GDF_PICKLE_PATH, VECTOR_STORE_DIR
-from retriever import get_llm_response, perform_hybrid_retrieval
+# UPDATED: Import the retriever module itself, not its functions directly
+import retriever
 # UPDATED: Import the main function from data_processing
 from data_processing import main as run_data_processing
 
@@ -30,14 +31,20 @@ load_dotenv()
 # This block ensures that the data processing runs automatically if the DB is missing.
 if not os.path.exists(VECTOR_STORE_DIR) or not os.path.exists(GDF_PICKLE_PATH):
     st.info("First-time setup: The data is being processed. This may take a few minutes...")
-    # Create a placeholder to show logs
     with st.spinner("Downloading data, creating embeddings, and building the database..."):
         run_data_processing()
     st.success("Data processing complete! The app is ready.")
-    # Rerun the script to load the data into the app correctly
     st.rerun()
 
-# --- Caching Data ---
+# --- Caching Data and Initializing Retriever ---
+@st.cache_resource
+def initialize_retriever():
+    """
+    Initializes all the necessary components for the retriever.
+    Using @st.cache_resource ensures this is done only once.
+    """
+    return retriever.GeoRetriever()
+
 @st.cache_data
 def load_geodata():
     """
@@ -88,7 +95,10 @@ def main():
     st.title("🗺️ Geographic RAG for Delhi Wards")
     st.markdown("Ask a question about the municipal wards of Delhi.")
     
+    # Initialize the retriever and load data
+    geo_retriever = initialize_retriever()
     gdf = load_geodata()
+    
     if gdf is None: 
         return
 
@@ -104,12 +114,13 @@ def main():
             return
 
         with st.spinner("Searching wards and asking the LLM..."):
-            context_str, result_gdf = perform_hybrid_retrieval(query_text, gdf)
+            # UPDATED: Call methods from the retriever object
+            context_str, result_gdf = geo_retriever.perform_hybrid_retrieval(query_text, gdf)
             if result_gdf.empty:
                 st.warning("Could not find a relevant ward. Please try another question.")
                 return
 
-            llm_answer = get_llm_response(context=context_str, query=query_text)
+            llm_answer = geo_retriever.get_llm_response(context=context_str, query=query_text)
             st.subheader("Answer")
             st.markdown(llm_answer)
             st.subheader("Found Wards on Map")
