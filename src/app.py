@@ -1,6 +1,9 @@
+# --- ChromaDB/SQLite3 Workaround for Streamlit Cloud ---
+# This code block must be at the very top of this file.
 import sys
 __import__('pysqlite3')
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+# --- End of Workaround ---
 
 import streamlit as st
 import geopandas as gpd
@@ -8,8 +11,10 @@ import os
 from dotenv import load_dotenv
 import pydeck as pdk
 
-from config import GDF_PICKLE_PATH
+from config import GDF_PICKLE_PATH, VECTOR_STORE_DIR
 from retriever import get_llm_response, perform_hybrid_retrieval
+# UPDATED: Import the main function from data_processing
+from data_processing import main as run_data_processing
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -20,6 +25,17 @@ st.set_page_config(
 
 # --- Load Environment Variables ---
 load_dotenv() 
+
+# --- Self-Initializing Data Setup ---
+# This block ensures that the data processing runs automatically if the DB is missing.
+if not os.path.exists(VECTOR_STORE_DIR) or not os.path.exists(GDF_PICKLE_PATH):
+    st.info("First-time setup: The data is being processed. This may take a few minutes...")
+    # Create a placeholder to show logs
+    with st.spinner("Downloading data, creating embeddings, and building the database..."):
+        run_data_processing()
+    st.success("Data processing complete! The app is ready.")
+    # Rerun the script to load the data into the app correctly
+    st.rerun()
 
 # --- Caching Data ---
 @st.cache_data
@@ -59,7 +75,6 @@ def create_map(data, zoom):
         auto_highlight=True
     )
     
-    # UPDATED: Using lowercase column names for the tooltip
     tooltip = {
         "html": "<b>Ward Name:</b> {ward_name}<br/><b>Ward No:</b> {ward_no}",
         "style": {"backgroundColor": "steelblue", "color": "white"},
@@ -104,7 +119,6 @@ def main():
             with st.expander("Show Retrieved Context"):
                 st.text(context_str)
             with st.expander("Show Data View of Results"):
-                # UPDATED: Using lowercase column names for the dataframe display
                 st.dataframe(result_gdf[['ward_name', 'ward_no']])
     else:
         st.info("Enter a query on the left to begin.")
