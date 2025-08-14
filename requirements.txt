@@ -6,3 +6,5 @@ geopandas
 rasterio
 shapely
 python-dotenv
+pysqlite3-binary
+chroma-hnswlib
