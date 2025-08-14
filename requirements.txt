@@ -8,3 +8,4 @@ shapely
 python-dotenv
 pysqlite3-binary
 chroma-hnswlib
+geopy
