@@ -20,7 +20,7 @@ geolocator = Nominatim(user_agent="geo_rag_app")
 
 # Correctly initialize the Together client with the API key from the environment
 try:
-    llm_client = Together(api_key="adf223b933e385e6215d78f558f04d9349818eac7b64b4097d64cfdefd120fba")
+    llm_client = Together(api_key=os.environ.get("TOGETHER_API_KEY"))
 except Exception as e:
     print(f"Failed to initialize Together client: {e}")
     llm_client = None
