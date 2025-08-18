@@ -7,20 +7,20 @@ from sentence_transformers import SentenceTransformer
 from geopy.geocoders import Nominatim
 from shapely.geometry import Point
 from together import Together
+from chromadb.api.models.Collection import Collection
 
 from config import (
-    EMBEDDING_MODEL_NAME, LLM_MODEL_NAME, CHROMA_COLLECTION_NAME
+    EMBEDDING_MODEL_NAME, LLM_MODEL_NAME
 )
 
-# UPDATED: The class is now initialized with a ChromaDB client.
+# UPDATED: The class is now initialized with a ChromaDB collection object.
 class GeoRetriever:
-    def __init__(self, client: chromadb.Client):
+    def __init__(self, collection: Collection):
         """
         Initializes all necessary components for the retriever.
         """
         print("Initializing GeoRetriever...")
-        self.client = client
-        self.collection = self.client.get_collection(name=CHROMA_COLLECTION_NAME)
+        self.collection = collection
         self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
         self.geolocator = Nominatim(user_agent="geo_rag_app")
         

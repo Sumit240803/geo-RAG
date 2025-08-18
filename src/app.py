@@ -11,10 +11,11 @@ import os
 from dotenv import load_dotenv
 import pydeck as pdk
 import chromadb
+from sentence_transformers import SentenceTransformer
 
-from config import GDF_PICKLE_PATH, VECTOR_STORE_DIR
+from config import GDF_PICKLE_PATH, CHROMA_COLLECTION_NAME, EMBEDDING_MODEL_NAME
 import retriever
-from data_processing import main as run_data_processing
+from data_processing import main as run_data_processing, create_feature_document
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -27,29 +28,43 @@ st.set_page_config(
 load_dotenv() 
 
 # --- Self-Initializing Data Setup ---
-if not os.path.exists(VECTOR_STORE_DIR) or not os.path.exists(GDF_PICKLE_PATH):
+# This block ensures that the data file is downloaded and pre-processed if it's missing.
+if not os.path.exists(GDF_PICKLE_PATH):
     st.info("First-time setup: The data is being processed. This may take a few minutes...")
-    with st.spinner("Downloading data, creating embeddings, and building the database..."):
+    with st.spinner("Downloading and preparing data file..."):
+        # We only run the data processing to download and create the Parquet file.
+        # The database itself will be built in memory.
         run_data_processing()
-    st.success("Data processing complete! The app is ready.")
+    st.success("Data preparation complete!")
     st.rerun()
 
 # --- Caching Data and Initializing Retriever ---
 @st.cache_resource
-def initialize_retriever():
+def initialize_database_and_retriever():
     """
-    Initializes the ChromaDB client and the GeoRetriever class.
-    This is now guaranteed to run after the data check.
+    Loads data, creates an in-memory ChromaDB collection, populates it, 
+    and then initializes the retriever. This is the core setup for the app.
     """
-    client = chromadb.PersistentClient(path=VECTOR_STORE_DIR)
-    return retriever.GeoRetriever(client)
-
-@st.cache_data
-def load_geodata():
-    """
-    Loads the preprocessed GeoDataFrame from a Parquet file.
-    """
-    return gpd.read_parquet(GDF_PICKLE_PATH)
+    gdf = gpd.read_parquet(GDF_PICKLE_PATH)
+    
+    # Create an in-memory ChromaDB client and collection
+    client = chromadb.Client()
+    collection = client.get_or_create_collection(name=CHROMA_COLLECTION_NAME)
+    
+    # Generate documents and embeddings
+    docs = gdf.apply(create_feature_document, axis=1).tolist()
+    embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    embeddings = embedding_model.encode(docs, show_progress_bar=True)
+    ids = gdf.index.astype(str).tolist()
+    
+    # Populate the in-memory collection
+    collection.add(ids=ids, embeddings=embeddings, documents=docs)
+    
+    # Initialize the retriever with the populated collection
+    geo_retriever = retriever.GeoRetriever(collection)
+    
+    # Return both the retriever and the GeoDataFrame
+    return geo_retriever, gdf
 
 # --- Pydeck Map Function ---
 def create_map(data, zoom):
@@ -57,25 +72,12 @@ def create_map(data, zoom):
     center_lat = data.geometry.centroid.y.mean()
     center_lon = data.geometry.centroid.x.mean()
 
-    view_state = pdk.ViewState(
-        latitude=center_lat,
-        longitude=center_lon,
-        zoom=zoom,
-        pitch=0,
-    )
+    view_state = pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=zoom, pitch=0)
 
     layer = pdk.Layer(
-        "GeoJsonLayer",
-        data,
-        opacity=0.6,
-        stroked=True,
-        filled=True,
-        extruded=False,
-        wireframe=True,
-        get_fill_color="[255, 0, 0, 140]",
-        get_line_color=[255, 255, 255],
-        pickable=True,
-        auto_highlight=True
+        "GeoJsonLayer", data, opacity=0.6, stroked=True, filled=True,
+        get_fill_color="[255, 0, 0, 140]", get_line_color=[255, 255, 255],
+        pickable=True, auto_highlight=True
     )
     
     tooltip = {
@@ -92,8 +94,7 @@ def main():
     st.markdown("Ask a question about the municipal wards of Delhi.")
     
     # Initialize the retriever and load data
-    geo_retriever = initialize_retriever()
-    gdf = load_geodata()
+    geo_retriever, gdf = initialize_database_and_retriever()
     
     if gdf is None: 
         return
